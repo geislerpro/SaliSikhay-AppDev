@@ -5,10 +5,11 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 ## 🌟 Features
 
 - **AI-Powered Quiz Generation**: Generate quizzes from any topic in seconds using GOOGLE AI
+- **Voice Control**: Create quizzes by speaking commands like "Make me a 10 question quiz about Python"
 - **PDF Upload & Processing**: Upload PDF/TXT files and automatically extract content for quiz creation
 - **User Authentication**: Secure JWT-based authentication system
 - **Progressive Web App (PWA)**: Install on mobile devices and work offline
-- **PostgreSQL Database**: Robust data persistence with relational models
+- **SQLite Database**: Local data persistence with relational models
 - **Real-time Analytics**: Track quiz attempts, scores, and progress
 - **Mobile-Friendly**: Responsive design that works seamlessly on all devices
 - **Quiz Review**: Detailed results with answer review and performance metrics
@@ -17,10 +18,10 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 
 ### Backend
 - **Framework**: Flask 3.0
-- **Database**: PostgreSQL
+- **Database**: SQLite
 - **Authentication**: Flask-JWT-Extended
 - **PDF Processing**: PyPDF2
-- **AI Integration**: Google API
+- **AI Integration**: Google Gemini API
 - **ORM**: SQLAlchemy
 
 ### Frontend
@@ -28,13 +29,13 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 - **PWA with Service Workers**
 - **Responsive Design**
 - **Offline Support**
+- **Web Speech API** (voice recognition and synthesis)
 
 ## 📋 Prerequisites
 
 - Python 3.8+
-- PostgreSQL 12+
 - pip (Python package manager)
-- Node.js (optional, for development tools)
+- Modern web browser with microphone support (Chrome, Edge, or Safari recommended)
 
 ## 🚀 Installation & Setup
 
@@ -66,42 +67,19 @@ pip install -r requirements.txt
 ### 4. Configure Environment Variables
 
 ```bash
-# Copy example env file
-cp .env.example .env
-
-# Edit .env with your settings
-# Update DATABASE_URL, JWT_SECRET_KEY, and GOOGLE_API_KEY
+# Create .env file in project root
+# Add your GOOGLE_API_KEY
+GOOGLE_API_KEY=your-api-key-here
 ```
 
-### 5. Set Up PostgreSQL Database
+### 5. Initialize Database
 
 ```bash
-# Create database
-createdb salisikhay
-
-# Optional: Create dedicated user
-createuser -P salisikhay_user
-# Grant privileges
-psql -c "GRANT ALL PRIVILEGES ON DATABASE salisikhay TO salisikhay_user;"
-
-# Update DATABASE_URL in .env:
-# DATABASE_URL=postgresql://salisikhay_user:password@localhost:5432/salisikhay
+# Database is created automatically on first run
+# SQLite database file: instance/salisikhay.db
 ```
 
-### 6. Initialize Database Tables
-
-```bash
-# The Flask app will automatically create tables on first run
-# Or manually run:
-python
->>> from app import create_app
->>> from models import db
->>> app = create_app()
->>> with app.app_context():
->>>     db.create_all()
-```
-
-### 7. Run the Application
+### 6. Run the Application
 
 ```bash
 python app.py
@@ -129,6 +107,13 @@ The application will start at `http://localhost:5000`
 1. Click on the upload area or drag & drop a PDF/TXT file
 2. Select number of questions
 3. File will be processed and quiz created automatically
+
+#### Method 3: Voice Control
+1. Click the 🎤 microphone button (bottom-right of dashboard)
+2. Grant microphone permission when prompted
+3. Speak a command: "Make me a 10 question quiz about [topic]"
+4. App will confirm the command and create the quiz
+5. Supported browsers: Chrome, Edge, Safari (requires internet connection)
 
 ### Taking a Quiz
 
@@ -249,19 +234,35 @@ CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:create_app()"]
 ## Troubleshooting
 
 ### Database Connection Error
-- Verify PostgreSQL is running: `pg_isready`
-- Check DATABASE_URL in .env
-- Ensure database exists: `psql -l`
+- Verify instance/salisikhay.db exists
+- Check database permissions
+- Delete .db file to reset (will recreate on startup)
 
 ### GOOGLE API Error
-- Verify GOOGLE_API_KEY is set correctly
-- Check API usage and limits in GOOGLE AI dashboard
+- Verify GOOGLE_API_KEY is set in .env
+- Check API usage in Google Cloud Console
 - App uses mock quiz generation as fallback
 
 ### File Upload Fails
 - Check file size (max 50MB)
 - Ensure file type is .pdf or .txt
 - Verify uploads folder has write permissions
+
+### Voice Control Not Working
+- **"Speech recognition error: network"**: Internet connectivity issue
+  - Check internet connection
+  - Disable VPN/Proxy
+  - Try different browser (Chrome/Edge recommended)
+- **"Microphone permission denied"**: Grant permission
+  - Click 🔒 lock in address bar
+  - Find "Microphone" and set to "Allow"
+- **"Recognition already started"**: Microphone in use
+  - Wait for current operation to complete
+  - Refresh page if stuck
+- **Voice control not appearing**: Script loading issue
+  - Hard refresh: Ctrl+Shift+R
+  - Check browser console (F12) for errors
+- **Supported browsers**: Chrome, Edge, Safari (Firefox has limited support)
 
 ### Service Worker Issues
 - Clear browser cache and service worker

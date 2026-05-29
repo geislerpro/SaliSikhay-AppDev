@@ -61,20 +61,22 @@ class VoiceQuizCreator {
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
+            this.isListening = false;
+            
             let errorMessage = 'Error: ';
             
             switch(event.error) {
                 case 'network':
-                    errorMessage += 'Network error';
+                    errorMessage += 'Network error - check internet connection';
                     break;
                 case 'audio':
-                    errorMessage += 'Audio error';
+                    errorMessage += 'Audio error - check microphone';
                     break;
                 case 'not-allowed':
-                    errorMessage += 'Microphone permission denied';
+                    errorMessage += 'Microphone permission denied - allow in browser settings';
                     break;
                 case 'no-speech':
-                    errorMessage += 'No speech detected';
+                    errorMessage += 'No speech detected - try again';
                     break;
                 default:
                     errorMessage += event.error;
@@ -100,14 +102,25 @@ class VoiceQuizCreator {
             return;
         }
 
+        // If already listening, stop it
         if (this.isListening) {
+            console.log('Already listening, stopping...');
             this.recognition.abort();
+            this.isListening = false;
             return;
         }
 
-        this.currentTranscript = '';
-        this.updateTranscript('');
-        this.recognition.start();
+        try {
+            this.currentTranscript = '';
+            this.updateTranscript('');
+            this.recognition.start();
+            this.isListening = true;
+        } catch (error) {
+            console.error('Error starting recognition:', error.message);
+            this.isListening = false;
+            this.updateStatus('error');
+            this.updateTranscript('Error starting microphone');
+        }
     }
 
     parseCommand(transcript) {
