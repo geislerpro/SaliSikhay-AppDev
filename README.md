@@ -4,7 +4,7 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 
 ## 🌟 Features
 
-- **AI-Powered Quiz Generation**: Generate quizzes from any topic in seconds using OpenAI
+- **AI-Powered Quiz Generation**: Generate quizzes from any topic in seconds using GOOGLE AI
 - **PDF Upload & Processing**: Upload PDF/TXT files and automatically extract content for quiz creation
 - **User Authentication**: Secure JWT-based authentication system
 - **Progressive Web App (PWA)**: Install on mobile devices and work offline
@@ -20,7 +20,7 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 - **Database**: PostgreSQL
 - **Authentication**: Flask-JWT-Extended
 - **PDF Processing**: PyPDF2
-- **AI Integration**: OpenAI API
+- **AI Integration**: Google API
 - **ORM**: SQLAlchemy
 
 ### Frontend
@@ -253,9 +253,9 @@ CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:create_app()"]
 - Check DATABASE_URL in .env
 - Ensure database exists: `psql -l`
 
-### OpenAI API Error
-- Verify OPENAI_API_KEY is set correctly
-- Check API usage and limits in OpenAI dashboard
+### GOOGLE API Error
+- Verify GOOGLE_API_KEY is set correctly
+- Check API usage and limits in GOOGLE AI dashboard
 - App uses mock quiz generation as fallback
 
 ### File Upload Fails
