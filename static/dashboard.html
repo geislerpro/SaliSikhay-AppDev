@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7e22ce">
+    <title>Dashboard - SaliSikhayAI</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dashboard-body">
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="logo">⚡ SaliSikh<span>AI</span></h1>
+            <div class="user-profile">
+                <span id="welcome-message">Welcome, User</span>
+                <button id="logout-btn" class="logout-link">Log Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        
+        <section class="generator-section">
+            <h2>Generate New Quizzes</h2>
+            <p class="section-desc">Create study quizzes in seconds using AI or upload your documents.</p>
+            
+            <div class="generator-grid">
+                <!-- AI Topic Generator -->
+                <div class="gen-card prompt-box">
+                    <h3>📝 AI Topic Generator</h3>
+                    <form id="ai-generation-form">
+                        <div class="input-group">
+                            <label for="ai-prompt">What topic would you like to study?</label>
+                            <textarea id="ai-prompt" placeholder="e.g., Photosynthesis, JavaScript Promises, World War II..." required></textarea>
+                        </div>
+                        <div class="input-group">
+                            <label for="num-questions">Number of Questions</label>
+                            <select id="num-questions" class="form-select" required>
+                                <option value="">Select number of questions</option>
+                                <option value="5">5 Questions</option>
+                                <option value="10">10 Questions</option>
+                                <option value="15">15 Questions</option>
+                                <option value="20">20 Questions</option>
+                            </select>
+                        </div>
+                        <button type="submit" id="generate-btn" class="primary-btn">✨ Generate with AI</button>
+                    </form>
+                </div>
+
+                <!-- PDF Upload -->
+                <div class="gen-card upload-box" id="drop-zone">
+                    <div class="upload-icon">📁</div>
+                    <h3>📄 Upload Document</h3>
+                    <p>Drag &amp; drop your PDF or text file</p>
+                    <span class="file-dummy-btn">Browse Files</span>
+                    <input type="file" id="file-input" style="display: none;" accept=".pdf,.txt,application/pdf,text/plain" aria-hidden="true">
+                    <div class="input-group" style="margin-top: 15px; pointer-events: auto;">
+                        <label for="pdf-num-questions" style="pointer-events: none;">Questions</label>
+                        <select id="pdf-num-questions" class="form-select" required style="pointer-events: auto;">
+                            <option value="5" selected>5 Questions</option>
+                            <option value="10">10 Questions</option>
+                            <option value="15">15 Questions</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Progress -->
+            <div id="upload-progress" class="upload-progress hidden">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p id="progress-text">Processing...</p>
+            </div>
+        </section>
+
+        <hr class="section-divider">
+
+        <!-- Filters & Stats -->
+        <section class="stats-section">
+            <div class="stat-card">
+                <div class="stat-value" id="total-quizzes">0</div>
+                <div class="stat-label">Quizzes Created</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-attempts">0</div>
+                <div class="stat-label">Attempts Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-score">0%</div>
+                <div class="stat-label">Average Score</div>
+            </div>
+        </section>
+
+        <hr class="section-divider">
+
+        <section class="decks-section">
+            <div class="section-header">
+                <h2>Your Quizzes</h2>
+                <div class="filter-group">
+                    <select id="sort-filter" class="form-select">
+                        <option value="recent">Most Recent</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name">Name (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="decks-grid" id="decks-container">
+                <div class="loading-spinner">Loading quizzes...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal for Quiz Confirmation -->
+    <div id="quiz-modal" class="modal hidden">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <h3 id="modal-title">Start Quiz</h3>
+            <p id="modal-description"></p>
+            <div class="modal-buttons">
+                <button class="secondary-btn" onclick="closeModal()">Cancel</button>
+                <button class="primary-btn" id="start-quiz-btn">Start Quiz</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

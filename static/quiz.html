@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7e22ce">
+    <title>Quiz - SaliSikhayAI</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="quiz-body">
+    <nav class="quiz-navbar">
+        <div class="quiz-nav-container">
+            <button class="back-btn" onclick="goBack()">← Back</button>
+            <h2 id="quiz-title">Quiz</h2>
+            <div class="quiz-timer">
+                <span id="timer">00:00</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="quiz-container">
+        <div class="quiz-content">
+            <!-- Progress Bar -->
+            <div class="progress-section">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text"><span id="current-question">1</span> of <span id="total-questions">10</span></p>
+            </div>
+
+            <!-- Question Display -->
+            <div class="question-section">
+                <div class="question-badge" id="question-badge">Question 1</div>
+                <h3 id="question-text"></h3>
+
+                <!-- Options Container -->
+                <div class="options-container" id="options-container"></div>
+
+                <!-- Answer Feedback -->
+                <div id="answer-feedback" class="answer-feedback hidden"></div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="quiz-controls">
+                <button id="prev-btn" class="secondary-btn" onclick="previousQuestion()">← Previous</button>
+                <button id="next-btn" class="primary-btn" onclick="nextQuestion()">Next →</button>
+            </div>
+        </div>
+
+        <!-- Question Navigator Sidebar (Mobile-friendly) -->
+        <aside class="question-navigator">
+            <h4>Questions</h4>
+            <div id="question-navigator" class="navigator-grid"></div>
+        </aside>
+    </main>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/quiz.js"></script>
+</body>
+</html>
