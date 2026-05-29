@@ -149,8 +149,11 @@ async function apiCall(endpoint, method = 'GET', data = null) {
     }
     
     try {
-        console.log(`🔵 API Call: ${method} ${API_BASE_URL}${endpoint}`, data);
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+        const fullUrl = `${API_BASE_URL}${endpoint}`;
+        console.log(`🔵 API Call: ${method} ${fullUrl}`, data);
+        console.log(`🔑 Token: ${token ? token.substring(0, 20) + '...' : 'MISSING'}`);
+        
+        const response = await fetch(fullUrl, options);
         
         console.log(`📊 Response status: ${response.status}`);
         
@@ -167,11 +170,12 @@ async function apiCall(endpoint, method = 'GET', data = null) {
         try {
             return JSON.parse(responseText);
         } catch (e) {
-            console.error('Failed to parse JSON:', e);
+            console.error('Failed to parse JSON:', e, 'Raw response:', responseText);
             return { error: 'Invalid JSON response: ' + responseText };
         }
     } catch (error) {
-        console.error('❌ Network Error:', error);
+        console.error('❌ Network Error:', error.message);
+        console.error('Error details:', error);
         return { error: 'Network error: ' + error.message };
     }
 }

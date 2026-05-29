@@ -158,19 +158,18 @@ class VoiceQuizCreator {
         }
     }
 
-    confirmAndCreateQuiz(topic, numQuestions, originalCommand) {
+    async confirmAndCreateQuiz(topic, numQuestions, originalCommand) {
         this.updateStatus('creating');
         
         const confirmMessage = `Creating a ${numQuestions} question quiz about ${topic}`;
         console.log('Confirmation:', confirmMessage);
         this.updateTranscript(`${confirmMessage}`);
         
-        this.speak(confirmMessage, () => {
-            this.createQuiz(topic, numQuestions);
-        });
+        await this.speak(confirmMessage);
+        await this.createQuiz(topic, numQuestions);
     }
 
-    createQuiz(topic, numQuestions) {
+    async createQuiz(topic, numQuestions) {
         if (typeof apiCall !== 'function') {
             console.error('apiCall function not found');
             this.updateStatus('error');
@@ -178,46 +177,85 @@ class VoiceQuizCreator {
             return;
         }
 
-        apiCall('/quiz/create-from-topic', 'POST', {
-            topic: topic,
-            num_questions: numQuestions
-        }, (response) => {
-            console.log('Quiz created:', response);
+        // Check for token
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            console.error('No auth token found');
+            this.updateStatus('error');
+            this.speak('Error: Not logged in. Please log in first.');
+            this.updateTranscript('Error: Not logged in');
+            return;
+        }
+
+        try {
+            console.log('🎤 Voice Control: Making API call to /quiz/create-from-topic');
+            console.log('Topic:', topic, 'Questions:', numQuestions);
+            
+            const response = await apiCall('/quiz/create-from-topic', 'POST', {
+                topic: topic,
+                num_questions: numQuestions
+            });
+
+            console.log('🎤 API Response:', response);
+
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
+            if (!response.quiz_id) {
+                console.warn('No quiz_id in response:', response);
+                throw new Error('No quiz created');
+            }
+
+            console.log('✅ Quiz created:', response);
             this.updateStatus('success');
             this.speak(`Quiz created! ${numQuestions} questions about ${topic}`);
             this.updateTranscript(`✓ Quiz created with ${numQuestions} questions`);
             
             setTimeout(() => {
-                if (response.quiz_id) {
-                    window.location.href = `/static/quiz.html?quiz_id=${response.quiz_id}`;
-                } else {
-                    location.reload();
-                }
+                window.location.href = `/static/quiz.html?quiz_id=${response.quiz_id}`;
             }, 1500);
-        }, (error) => {
-            console.error('Quiz creation error:', error);
+        } catch (error) {
+            console.error('❌ Quiz creation error:', error.message, error);
             this.updateStatus('error');
-            this.speak('Error creating quiz. Please try again.');
-            this.updateTranscript(`Error: ${error}`);
-        });
+            
+            let errorMsg = error.message;
+            if (errorMsg.includes('Network')) {
+                errorMsg = 'Network error. Check console for details.';
+            }
+            
+            this.speak(`Error: ${errorMsg}`);
+            this.updateTranscript(`Error: ${errorMsg}`);
+        }
     }
 
     speak(text, callback = null) {
-        if (!this.synth) return;
+        return new Promise((resolve) => {
+            if (!this.synth) {
+                resolve();
+                return;
+            }
 
-        // Cancel any ongoing speech
-        this.synth.cancel();
+            // Cancel any ongoing speech
+            this.synth.cancel();
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.volume = 1;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1;
+            utterance.pitch = 1;
+            utterance.volume = 1;
 
-        if (callback) {
-            utterance.onend = callback;
-        }
+            const finishHandler = () => {
+                if (callback) {
+                    callback();
+                }
+                resolve();
+            };
 
-        this.synth.speak(utterance);
+            utterance.onend = finishHandler;
+            utterance.onerror = finishHandler;
+
+            this.synth.speak(utterance);
+        });
     }
 
     updateStatus(status) {
