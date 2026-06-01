@@ -18,11 +18,12 @@ A modern, full-stack web application for instantly creating interactive quizzes 
 
 ### Backend
 - **Framework**: Flask 3.0
-- **Database**: SQLite
-- **Authentication**: Flask-JWT-Extended
+- **Database**: SQLite (local) / PostgreSQL (production)
+- **Authentication**: Flask-JWT-Extended (JWT tokens)
 - **PDF Processing**: PyPDF2
-- **AI Integration**: Google Gemini API
+- **AI Integration**: Google Gemini API (with fallback)
 - **ORM**: SQLAlchemy
+- **Server**: Gunicorn (production)
 
 ### Frontend
 - **HTML5/CSS3/JavaScript (ES6+)**
@@ -113,7 +114,8 @@ The application will start at `http://localhost:5000`
 2. Grant microphone permission when prompted
 3. Speak a command: "Make me a 10 question quiz about [topic]"
 4. App will confirm the command and create the quiz
-5. Supported browsers: Chrome, Edge, Safari (requires internet connection)
+5. **Requirements**: Chrome, Edge, or Safari + stable internet connection
+6. **Note**: If you get "network error", check your internet connection
 
 ### Taking a Quiz
 
@@ -145,9 +147,33 @@ The application will start at `http://localhost:5000`
 ### PDF Processing
 - `POST /api/pdf/upload` - Upload and process PDF file
 
-## 🌐 PWA Installation
+## 🌐 PWA Installation & Deployment
 
+### Install on Mobile
 The app is a Progressive Web App (PWA) and can be installed on devices:
+
+### Deploy to Railway
+For production deployment on Railway:
+
+1. **Prepare repository**:
+   - Push code to GitHub
+   - Ensure `Procfile` exists with: `web: gunicorn app:create_app()`
+   - Add `gunicorn` to `requirements.txt`
+
+2. **Connect to Railway**:
+   - Create project at https://railway.app
+   - Connect GitHub repository
+   - Add PostgreSQL plugin (automatic DATABASE_URL setup)
+   - Deploy automatically on push
+
+3. **Configure environment**:
+   - Set `JWT_SECRET_KEY` in Railway env vars
+   - Set `GOOGLE_API_KEY` for AI features
+   - Railway provides `DATABASE_URL` automatically
+
+4. **Access deployed app**:
+   - Railway provides domain URL (e.g., app-name.up.railway.app)
+   - All API endpoints work automatically
 
 ### On Mobile (Chrome, Firefox)
 1. Visit the application in your browser

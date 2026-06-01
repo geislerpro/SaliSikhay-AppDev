@@ -1,8 +1,8 @@
-# Quick Start Guide - SaliSikhayAI
+# SaliSikhayAI - Setup Guide
 
-## 5-Minute Setup
+## 🚀 Quick Start (Local Development)
 
-### Windows Setup
+### Windows Setup - 5 Minutes
 
 ```bash
 # 1. Navigate to project
@@ -17,29 +17,36 @@ venv\Scripts\activate
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Configure PostgreSQL connection
-# Edit .env file:
+# 5. Configure environment
 copy .env.example .env
-# Update DATABASE_URL with your PostgreSQL credentials
+# Edit .env and add your API keys
 
 # 6. Start Flask application
 python app.py
 ```
 
-The app will be available at: **http://localhost:5000**
+App available at: **http://localhost:5000**
 
-## Database Setup
+## 💾 Database Setup
 
-### Using PostgreSQL
+### Local Development (SQLite - Default)
+
+```bash
+# No setup needed! SQLite is default and auto-creates:
+# instance/salisikhay.db
+
+# Just run:
+python app.py
+```
+
+### Production with PostgreSQL
 
 ```bash
 # Create database
 createdb salisikhay
 
 # In .env file, set:
-DATABASE_URL=postgresql://postgres:password@localhost:5432/salisikhay
-
-# Note: Modify the username/password according to your PostgreSQL setup
+DATABASE_URL=postgresql://user:password@localhost:5432/salisikhay
 ```
 
 ## Using the App
@@ -77,50 +84,68 @@ To enable AI-powered quiz generation:
 - Change port in app.py: `app.run(port=5001)`
 - Or kill the process using port 5000
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 appdev_finals/
-├── app.py                 # Flask application entry point
-├── config.py             # Configuration settings
-├── models.py             # Database models
-├── requirements.txt      # Python dependencies
-├── README.md             # Full documentation
-├── .env                  # Environment variables (create from .env.example)
-├── static/              # Frontend files
-│   ├── index.html       # Login/Register page
-│   ├── dashboard.html   # Main quiz interface
-│   ├── quiz.html        # Quiz taking page
-│   ├── results.html     # Results page
-│   ├── style.css        # Main stylesheet
-│   ├── app.js           # Authentication & utilities
-│   ├── dashboard.js     # Dashboard logic
-│   ├── quiz.js          # Quiz interface
-│   ├── results.js       # Results display
-│   ├── manifest.json    # PWA configuration
-│   └── service-worker.js # Offline support
-├── routes/              # API endpoints
-│   ├── auth.py          # Authentication routes
-│   ├── quiz.py          # Quiz management routes
-│   └── pdf.py           # PDF upload routes
-├── services/            # Business logic
-│   ├── ai_service.py    # AI quiz generation
-│   └── pdf_service.py   # PDF processing
-└── uploads/             # Uploaded files storage
+├── 🎯 Core
+│   ├── app.py                 # Flask app entry point
+│   ├── config.py              # Config & environment setup
+│   ├── models.py              # Database models
+│   └── requirements.txt        # Python dependencies
+├── 🎨 Frontend (/static)
+│   ├── index.html             # Login/Register
+│   ├── dashboard.html         # Quiz dashboard
+│   ├── quiz.html              # Quiz taker
+│   ├── results.html           # Results view
+│   ├── style.css              # Responsive styling
+│   ├── app.js, dashboard.js, quiz.js, results.js  # JS logic
+│   ├── manifest.json          # PWA manifest
+│   ├── service-worker.js      # Offline support
+│   └── voice-control.js       # Voice recognition
+├── 🛤️ API Routes (/routes)
+│   ├── auth.py                # Auth endpoints
+│   ├── quiz.py                # Quiz endpoints
+│   └── pdf.py                 # PDF upload
+├── ⚙️ Services (/services)
+│   ├── ai_service.py          # AI quiz generation
+│   └── pdf_service.py         # PDF text extraction
+├── 📦 Data
+│   ├── uploads/               # User uploaded files
+│   └── instance/              # SQLite database
+└── 📚 Docs
+    ├── README.md              # Full documentation
+    ├── SETUP.md               # This file
+    ├── IMPLEMENTATION_SUMMARY.md  # What's included
+    └── .env.example           # Environment template
 ```
 
-## Development vs Production
+## 🔄 Running the App
 
-### Development
+### Development (Local)
 ```bash
-# Auto-reload on changes
-python app.py  # Flask debug mode is enabled
+python app.py
+# Debug mode enabled, auto-reload on file changes
+# Access: http://localhost:5000
 ```
 
-### Production
+### Production (Gunicorn)
 ```bash
+# Add gunicorn to requirements.txt:
 pip install gunicorn
+
+# Run with Gunicorn:
 gunicorn -w 4 -b 0.0.0.0:5000 app:create_app()
+```
+
+### Railway Deployment
+```bash
+# 1. Add Procfile to project root:
+# web: gunicorn app:create_app()
+
+# 2. Add PostgreSQL plugin in Railway dashboard
+# 3. Push to GitHub
+# 4. Railway automatically deploys and sets DATABASE_URL
 ```
 
 ## Testing the API
@@ -145,9 +170,48 @@ curl -X POST http://localhost:5000/api/quiz/create-from-topic \
   -d '{"topic":"Python Programming","num_questions":5}'
 ```
 
-## Next Steps
+## 🔑 Environment Variables
 
-1. ✅ Database setup complete
+```bash
+# .env file (create from .env.example)
+
+# Database (auto-set by Railway, or use local SQLite)
+DATABASE_URL=sqlite:///instance/salisikhay.db  # Local
+# DATABASE_URL=postgresql://user:pass@host/db  # Production
+
+# JWT Secret (change in production!)
+JWT_SECRET_KEY=your-secret-key-change-in-production
+
+# Google Gemini API (for AI quiz generation)
+GOOGLE_API_KEY=your-api-key-here
+
+# Optional: OpenAI API (alternative AI provider)
+OPENAI_API_KEY=sk-your-key-here
+```
+
+## 🐛 Troubleshooting
+
+### Network Error with Voice Control
+- **Cause**: Browser can't reach Google's speech recognition servers
+- **Fix**: Check internet connection, use Chrome/Edge, check microphone permissions
+- **Note**: Requires internet connection (no offline voice support)
+
+### Database Connection Error
+- Ensure PostgreSQL is running (production)
+- Check DATABASE_URL in .env
+- SQLite uses local file (development)
+
+### Port 5000 Already in Use
+- Change port: Edit `app.py` line ~83 to use different port
+- Or kill process: `Get-Process -Name python | Stop-Process` (Windows)
+
+### ModuleNotFoundError
+- Activate virtual environment: `venv\Scripts\activate`
+- Install dependencies: `pip install -r requirements.txt`
+
+## ✅ Next Steps
+
+1. ✅ Environment setup complete
 2. ✅ Backend API ready
 3. ✅ Frontend interface ready
 4. ✅ PWA support enabled
