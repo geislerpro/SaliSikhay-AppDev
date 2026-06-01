@@ -1,5 +1,11 @@
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+        return 'http://localhost:5000/api';
+    }
+    return `${window.location.protocol}//${host}/api`;
+})();
 let authToken = localStorage.getItem('auth_token');
 
 // Authentication Functions

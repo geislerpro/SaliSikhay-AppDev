@@ -215,18 +215,29 @@ class VoiceQuizCreator {
                 throw new Error(response.error);
             }
 
-            if (!response.quiz_id) {
-                console.warn('No quiz_id in response:', response);
+            const quizId = response.quiz?.id || response.quiz_id;
+            if (!quizId) {
+                console.warn('No quiz id in response:', response);
                 throw new Error('No quiz created');
             }
 
-            console.log('✅ Quiz created:', response);
+            // Start new quiz attempt immediately after voice creation
+            const attemptResult = await apiCall(`/quiz/attempt/start/${quizId}`, 'POST');
+            if (attemptResult.error || !attemptResult.attempt) {
+                console.warn('Unable to start quiz attempt automatically:', attemptResult);
+                throw new Error(attemptResult.error || 'Quiz created but could not start attempt');
+            }
+
+            localStorage.setItem('current_quiz_id', quizId);
+            localStorage.setItem('current_attempt', JSON.stringify(attemptResult.attempt));
+
+            console.log('✅ Quiz created and attempt started:', response, attemptResult);
             this.updateStatus('success');
-            this.speak(`Quiz created! ${numQuestions} questions about ${topic}`);
-            this.updateTranscript(`✓ Quiz created with ${numQuestions} questions`);
+            this.speak(`Quiz created and ready. Starting your ${numQuestions} question quiz about ${topic}`);
+            this.updateTranscript(`✓ Quiz created and attempt started`);
             
             setTimeout(() => {
-                window.location.href = `/static/quiz.html?quiz_id=${response.quiz_id}`;
+                window.location.href = 'quiz.html';
             }, 1500);
         } catch (error) {
             console.error('❌ Quiz creation error:', error.message, error);

@@ -84,7 +84,8 @@ def create_from_topic():
         
         return {
             'message': 'Quiz created successfully',
-            'quiz': quiz.to_dict(include_questions=True)
+            'quiz': quiz.to_dict(include_questions=True),
+            'quiz_id': quiz.id
         }, 201
     
     except Exception as e:

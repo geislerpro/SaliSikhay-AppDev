@@ -1,5 +1,6 @@
 import json
-import google.generativeai as genai
+import re
+import requests
 from config import Config
 
 print(f"🔍 AI Service Init: GOOGLE_API_KEY length = {len(Config.GOOGLE_API_KEY) if Config.GOOGLE_API_KEY else 0}")
@@ -8,9 +9,143 @@ print(f"🔍 AI Service Init: Starts with AIza = {Config.GOOGLE_API_KEY.startswi
 print(f"🔍 AI Service Init: Starts with AQ. = {Config.GOOGLE_API_KEY.startswith('AQ.') if Config.GOOGLE_API_KEY else False}")
 print(f"🔍 AI Service Init: Has valid key = {(Config.GOOGLE_API_KEY.startswith('AIza') or Config.GOOGLE_API_KEY.startswith('AQ.')) if Config.GOOGLE_API_KEY else False}")
 
-# Configure Gemini API
-if Config.GOOGLE_API_KEY:
-    genai.configure(api_key=Config.GOOGLE_API_KEY)
+
+def _call_gemini_api(prompt, model='gemini-3.5-flash', temperature=0.2, max_output_tokens=800, top_p=0.95, top_k=40):
+    if not Config.GOOGLE_API_KEY:
+        raise RuntimeError("Google API key missing or invalid.")
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1/models/"
+        f"{model}:generateContent?key={Config.GOOGLE_API_KEY}"
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_output_tokens,
+            "topP": top_p,
+            "topK": top_k
+        }
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(url, json=payload, headers=headers, timeout=60)
+    response.raise_for_status()
+
+    result = response.json()
+
+    try:
+        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except (KeyError, IndexError, TypeError):
+        raise ValueError(f"Unexpected Gemini response format: {result}")
+
+
+def _extract_json_from_text(text):
+    if not text:
+        raise ValueError("Empty response")
+
+    # remove markdown
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    # find first full JSON object
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError(f"No JSON found in response:\n{text}")
+
+    json_str = match.group()
+
+    # FINAL SAFE PARSE HERE (important!)
+    return json.loads(json_str)
+
+
+def _validate_quiz_data(quiz_data):
+    if not isinstance(quiz_data, dict):
+        return False
+    questions = quiz_data.get('questions')
+    if not isinstance(questions, list) or len(questions) == 0:
+        return False
+    for q in questions:
+        if not isinstance(q, dict):
+            return False
+        if not q.get('question') or not q.get('type') or not q.get('correct_answer'):
+            return False
+        q_type = q.get('type')
+        if q_type == 'multiple_choice':
+            options = q.get('options')
+            if not isinstance(options, dict) or len(options) < 3:
+                return False
+            correct_answer = str(q.get('correct_answer'))
+            if correct_answer not in options and correct_answer.upper() not in options:
+                return False
+        elif q_type == 'true_false':
+            options = q.get('options')
+            if not isinstance(options, dict) or 'true' not in options or 'false' not in options:
+                return False
+            if str(q.get('correct_answer')).lower() not in ['true', 'false']:
+                return False
+    return True
+
+
+def _normalize_question(q):
+    if not isinstance(q, dict):
+        return q
+    normalized = dict(q)
+    q_type = q.get('type')
+    options = q.get('options')
+    correct_answer = q.get('correct_answer')
+
+    if q_type == 'multiple_choice':
+        normalized_options = {}
+        if isinstance(options, list):
+            for idx, value in enumerate(options[:4]):
+                normalized_options[chr(65 + idx)] = str(value).strip()
+        elif isinstance(options, dict):
+            # Preserve A-D labels when present, otherwise assign sequential letters
+            sequential = []
+            for key, value in options.items():
+                if isinstance(key, str) and key.strip().upper() in ['A', 'B', 'C', 'D']:
+                    normalized_options[key.strip().upper()] = str(value).strip()
+                else:
+                    sequential.append(str(value).strip())
+            for idx, value in enumerate(sequential, start=len(normalized_options)):
+                if idx < 4:
+                    normalized_options[chr(65 + idx)] = value
+        if normalized_options:
+            normalized['options'] = normalized_options
+            answer = str(correct_answer).strip() if correct_answer is not None else ''
+            if answer.upper() in normalized_options:
+                normalized['correct_answer'] = answer.upper()
+            else:
+                cleaned = re.sub(r'^[A-Da-d][\).\s]*', '', answer).strip().lower()
+                for key, value in normalized_options.items():
+                    if cleaned == str(value).strip().lower():
+                        normalized['correct_answer'] = key
+                        break
+    elif q_type == 'true_false':
+        normalized_options = {'true': 'True', 'false': 'False'}
+        if isinstance(options, dict):
+            normalized_options['true'] = str(options.get('true', 'True')).strip()
+            normalized_options['false'] = str(options.get('false', 'False')).strip()
+        normalized['options'] = normalized_options
+        answer = str(correct_answer).strip().lower() if correct_answer is not None else ''
+        if answer in ['true', 't', 'yes', 'y', '1']:
+            normalized['correct_answer'] = 'true'
+        elif answer in ['false', 'f', 'no', 'n', '0']:
+            normalized['correct_answer'] = 'false'
+        else:
+            if answer == normalized_options['true'].strip().lower():
+                normalized['correct_answer'] = 'true'
+            elif answer == normalized_options['false'].strip().lower():
+                normalized['correct_answer'] = 'false'
+    return normalized
 
 
 def generate_quiz_from_topic(topic, num_questions=5):
@@ -19,16 +154,21 @@ def generate_quiz_from_topic(topic, num_questions=5):
     """
     print(f"🔵 generate_quiz_from_topic called with topic='{topic}', num_questions={num_questions}")
     
-    if not Config.GOOGLE_API_KEY or not (Config.GOOGLE_API_KEY.startswith('AIza') or Config.GOOGLE_API_KEY.startswith('AQ.')):
-        print("⚠️  No valid Google API key, using mock quiz")
-        return generate_mock_quiz(topic, num_questions)
+    if not Config.GOOGLE_API_KEY:
+        raise RuntimeError('Google API key missing or invalid. AI quiz generation is disabled.')
     
     try:
         print("🔵 Calling Google Gemini API...")
         
-        prompt = f"""Create a quiz with {num_questions} questions about "{topic}".
-        
-        Return the response in this exact JSON format:
+        prompt = f"""You are an expert educational content author. Create {num_questions} high-quality quiz questions about the subject \"{topic}\".
+        CRITICAL RULES:
+            - Use double quotes for ALL strings and keys
+            - Do not use single quotes
+            - Do not add trailing commas
+            - Output must be valid JSON parsable by Python json.loads()
+            - Do not include JavaScript or Python syntax
+            - Do not include comments
+        Return only valid JSON using this exact schema:
         {{
             "title": "Quiz title",
             "description": "Brief description",
@@ -40,37 +180,59 @@ def generate_quiz_from_topic(topic, num_questions=5):
                     "correct_answer": "A"
                 }},
                 {{
-                    "question": "True or false question?",
+                    "question": "Question text",
                     "type": "true_false",
                     "options": {{"true": "True", "false": "False"}},
                     "correct_answer": "true"
-                }},
-                ...
+                }}
             ]
         }}
         
-        Make the questions varied and educational. Mix question types between multiple_choice and true_false. For true_false questions, always use exactly this format with options as {{"true": "True", "false": "False"}} and correct_answer as either "true" or "false"."""
+        Use a mix of multiple_choice and true_false questions.
+        For multiple_choice questions provide four distinct, plausible answer choices.
+        For true_false questions use exactly: {{"true": "True", "false": "False"}}.
+        Set correct_answer to one of "A", "B", "C", "D" for multiple_choice or "true"/"false" for true_false.
+        Return exactly {num_questions} questions in the questions list.
+        Make every question clearly about the topic, not just a keyword rewrite of the topic.
+        Create full, meaningful answer options and mark the correct answer clearly.
+        Do not include any markdown, comments, or extra text outside the JSON object."""
         
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        response_text = response.text
+        response_text = _call_gemini_api(prompt, model='gemini-3.5-flash', temperature=0.2, max_output_tokens=4000)
+        print(f"📝 Gemini response received: {response_text}...")
         
-        print(f"📝 Gemini response received: {response_text[:100]}...")
+        quiz_data = _extract_json_from_text(response_text)
+        quiz_data['questions'] = [_normalize_question(q) for q in quiz_data.get('questions', [])]
         
-        # Extract JSON from response (Gemini might wrap it in markdown)
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-        
-        quiz_data = json.loads(response_text)
-        
+        if len(quiz_data.get('questions', [])) != num_questions:
+            raise ValueError(f'AI returned {len(quiz_data.get("questions", []))} questions instead of {num_questions}')
+        if not _validate_quiz_data(quiz_data):
+            raise ValueError('Invalid quiz JSON from AI')
+
+        topic_lower = topic.lower()
+        topic_terms = [w for w in re.findall(r"\w+", topic_lower) if len(w) > 3 and w not in {'about','from','with','your','this','that','from','into','over','under','before','after','within','through'}]
+        if not topic_terms:
+            topic_terms = [topic_lower]
+        related_question_count = sum(
+            1 for q in quiz_data.get('questions', [])
+            if any(term in q.get('question', '').lower() for term in topic_terms)
+        )
+        if related_question_count < max(1, num_questions // 2):
+            print('⚠️ Topic relevance low, retrying with stronger topic constraints')
+            retry_prompt = prompt + '\n\nRegenerate the quiz now, ensuring every question uses the topic or primary topic keywords in the question text.'
+            retry_text = _call_gemini_api(retry_prompt, model='gemini-3.5-flash', temperature=0.1, max_output_tokens=4000)
+            print(f"📝 Gemini retry response received: {retry_text[:100]}...")
+            quiz_data = _extract_json_from_text(retry_text)
+            quiz_data['questions'] = [_normalize_question(q) for q in quiz_data.get('questions', [])]
+            if len(quiz_data.get('questions', [])) != num_questions:
+                raise ValueError(f'AI retry returned {len(quiz_data.get("questions", []))} questions instead of {num_questions}')
+            if not _validate_quiz_data(quiz_data):
+                raise ValueError('Invalid quiz JSON from AI after retry')
+
         # Ensure true_false questions have proper options
         for q in quiz_data.get('questions', []):
             if q.get('type') == 'true_false':
                 if not q.get('options'):
                     q['options'] = {'true': 'True', 'false': 'False'}
-                # Normalize correct_answer to lowercase
                 if q.get('correct_answer'):
                     q['correct_answer'] = q['correct_answer'].lower()
         
@@ -81,8 +243,7 @@ def generate_quiz_from_topic(topic, num_questions=5):
         print(f"❌ Error generating quiz from topic: {str(e)}")
         import traceback
         traceback.print_exc()
-        print("⚠️  Falling back to mock quiz")
-        return generate_mock_quiz(topic, num_questions)
+        raise
 
 
 def generate_quiz_from_text(text_content, num_questions=5):
@@ -91,9 +252,8 @@ def generate_quiz_from_text(text_content, num_questions=5):
     """
     print(f"🔵 generate_quiz_from_text called with text length={len(text_content)}, num_questions={num_questions}")
     
-    if not Config.GOOGLE_API_KEY or not (Config.GOOGLE_API_KEY.startswith('AIza') or Config.GOOGLE_API_KEY.startswith('AQ.')):
-        print("⚠️  No valid Google API key, using mock quiz")
-        return generate_mock_quiz_from_text(text_content[:500], num_questions)
+    if not Config.GOOGLE_API_KEY:
+        raise RuntimeError('Google API key missing or invalid. AI quiz generation is disabled.')
     
     try:
         # Truncate text if too long
@@ -102,12 +262,12 @@ def generate_quiz_from_text(text_content, num_questions=5):
         
         print("🔵 Calling Google Gemini API for text-based quiz...")
         
-        prompt = f"""Based on the following text, create {num_questions} quiz questions:
+        prompt = f"""You are an expert educational content author. Based on the following text, create {num_questions} high-quality quiz questions:
 
         TEXT:
         {text_content}
         
-        Return the response in this exact JSON format:
+        Return only valid JSON using this exact schema:
         {{
             "title": "Quiz from document",
             "description": "Questions based on the provided document",
@@ -119,37 +279,53 @@ def generate_quiz_from_text(text_content, num_questions=5):
                     "correct_answer": "A"
                 }},
                 {{
-                    "question": "True or false question based on the text?",
+                    "question": "Question text",
                     "type": "true_false",
                     "options": {{"true": "True", "false": "False"}},
                     "correct_answer": "true"
-                }},
-                ...
+                }}
             ]
         }}
         
-        Make questions that test understanding of the document content. For true_false questions, always use exactly this format with options as {{"true": "True", "false": "False"}} and correct_answer as either "true" or "false"."""
+        Use a mix of multiple_choice and true_false questions.
+        For multiple_choice questions provide four distinct, plausible answer choices.
+        For true_false questions use exactly: {{"true": "True", "false": "False"}}.
+        Set correct_answer to one of "A", "B", "C", "D" for multiple_choice or "true"/"false" for true_false.
+        Return exactly {num_questions} questions in the questions list.
+        Make every question clearly based on the provided text and avoid unrelated details.
+        Do not include any markdown, comments, or extra text outside the JSON object."""
         
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        response_text = response.text
-        
+        response_text = _call_gemini_api(prompt, model='gemini-3.5-flash', temperature=0.2, max_output_tokens=900)
         print(f"📝 Gemini response received: {response_text[:100]}...")
         
-        # Extract JSON from response (Gemini might wrap it in markdown)
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-        
+        response_text = _extract_json_from_text(response_text)
         quiz_data = json.loads(response_text)
+        quiz_data['questions'] = [_normalize_question(q) for q in quiz_data.get('questions', [])]
         
+        if len(quiz_data.get('questions', [])) != num_questions:
+            raise ValueError(f'AI returned {len(quiz_data.get("questions", []))} questions instead of {num_questions}')
+        if not _validate_quiz_data(quiz_data):
+            raise ValueError('Invalid quiz JSON from AI')
+
+        related_question_count = sum(1 for q in quiz_data.get('questions', []) if 'question' in q and any(term in q['question'].lower() for term in ['topic', 'text', 'document', 'passage', 'chapter', 'subject']))
+        if related_question_count < max(1, num_questions // 2):
+            print('⚠️ Document relevance low, retrying with stronger document focus')
+            retry_prompt = prompt + '\n\nRegenerate the quiz now, ensuring every question is clearly based on the provided document text and nothing else.'
+            retry_text = _call_gemini_api(retry_prompt, model='gemini-3.5-flash', temperature=0.1, max_output_tokens=900)
+            print(f"📝 Gemini retry response received: {retry_text[:100]}...")
+            retry_text = _extract_json_from_text(retry_text)
+            quiz_data = json.loads(retry_text)
+            quiz_data['questions'] = [_normalize_question(q) for q in quiz_data.get('questions', [])]
+            if len(quiz_data.get('questions', [])) != num_questions:
+                raise ValueError(f'AI retry returned {len(quiz_data.get("questions", []))} questions instead of {num_questions}')
+            if not _validate_quiz_data(quiz_data):
+                raise ValueError('Invalid quiz JSON from AI after retry')
+
         # Ensure true_false questions have proper options
         for q in quiz_data.get('questions', []):
             if q.get('type') == 'true_false':
                 if not q.get('options'):
                     q['options'] = {'true': 'True', 'false': 'False'}
-                # Normalize correct_answer to lowercase
                 if q.get('correct_answer'):
                     q['correct_answer'] = q['correct_answer'].lower()
         
@@ -158,8 +334,7 @@ def generate_quiz_from_text(text_content, num_questions=5):
     
     except Exception as e:
         print(f"❌ Error generating quiz from text: {str(e)}")
-        print("⚠️  Falling back to mock quiz from text")
-        return generate_mock_quiz_from_text(text_content[:500], num_questions)
+        raise
 
 
 def generate_mock_quiz(topic, num_questions=5):
@@ -193,17 +368,38 @@ def generate_mock_quiz(topic, num_questions=5):
     }
     
     # Varied answer options for different question types
+    topic_label = topic.strip().capitalize() if topic else 'This topic'
     answer_sets = [
-        ["A fundamental concept", "An advanced theory", "A basic principle", "A practical application"],
-        ["In education", "In business", "In technology", "In all sectors"],
-        ["Cost and complexity", "Time and resources", "Skills and knowledge", "All of the above"],
-        ["Improving efficiency", "Reducing errors", "Enhancing quality", "All of the above"],
-        ["Recent development", "Well-established", "Emerging trend", "Historical practice"],
-        ["5-10 years ago", "10-20 years ago", "Over 20 years ago", "Recently developed"],
-        ["Beginner", "Intermediate", "Advanced", "Expert"],
-        ["Yes, significantly", "Somewhat", "Minimal impact", "No impact"],
-        ["Growing rapidly", "Stable market", "Declining", "Fluctuating"],
-        ["Online courses", "Formal education", "Self-study", "Hands-on experience"],
+        [
+            f"{topic_label} is best described as a key idea or process.",
+            f"{topic_label} is primarily a historical event.",
+            f"{topic_label} is only used in one industry.",
+            f"{topic_label} is an unrelated entertainment concept."
+        ],
+        [
+            f"A common application of {topic_label} is in problem-solving.",
+            f"A common application of {topic_label} is in cooking recipes.",
+            f"A common application of {topic_label} is in fiction writing.",
+            f"A common application of {topic_label} is in an unrelated sport."
+        ],
+        [
+            f"{topic_label} usually involves analysis and reasoning.",
+            f"{topic_label} requires no planning at all.",
+            f"{topic_label} is mainly about finding hidden treasure.",
+            f"{topic_label} is only about memorizing dates."
+        ],
+        [
+            f"{topic_label} is generally considered important in modern education.",
+            f"{topic_label} is only for beginner hobbyists.",
+            f"{topic_label} is unrelated to professional practice.",
+            f"{topic_label} is only used for entertainment purposes."
+        ],
+        [
+            f"{topic_label} often improves efficiency or understanding.",
+            f"{topic_label} always makes things slower.",
+            f"{topic_label} is purely decorative.",
+            f"{topic_label} is mainly a marketing slogan."
+        ],
     ]
     
     mock_questions = []
