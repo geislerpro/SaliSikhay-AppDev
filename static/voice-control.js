@@ -3,6 +3,16 @@
  * Allows users to say commands like "Make me a 10 question quiz about Python"
  */
 
+console.log('🎤 Voice Control Module Loading...');
+
+// Check browser support
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognitionAPI) {
+    console.log('✅ Speech Recognition API: SUPPORTED');
+} else {
+    console.warn('❌ Speech Recognition API: NOT SUPPORTED - Try Chrome, Edge, Safari, or Firefox');
+}
+
 class VoiceQuizCreator {
     constructor() {
         this.recognition = null;
@@ -20,6 +30,7 @@ class VoiceQuizCreator {
             return;
         }
 
+        // Create fresh recognition object
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = false;
         this.recognition.interimResults = true;
@@ -28,22 +39,46 @@ class VoiceQuizCreator {
         this.setupListeners();
     }
 
+    createFreshRecognition() {
+        // Create a completely fresh recognition object - helps with state issues
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return false;
+        
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = false;
+        this.recognition.interimResults = true;
+        this.recognition.language = 'en-US';
+        
+        this.setupListeners();
+        return true;
+    }
+
     setupListeners() {
         if (!this.recognition) return;
 
+        console.log('📍 Setting up recognition event listeners...');
+        console.log('Recognition object ID:', this.recognition);
+
         this.recognition.onstart = () => {
+            console.log('🔥 ONSTART HANDLER FIRED');
             this.isListening = true;
             this.updateStatus('listening');
-            this.updateTranscript('Listening...');
-            console.log('Voice recognition started');
+            this.updateTranscript('🎤 Listening... Speak now!');
+            console.log('✅ Voice recognition STARTED - microphone is active');
+            console.log('🎤 You can now speak. Say: "Make me a 10 question quiz about Python"');
         };
+        
+        console.log('✅ onstart handler attached');
 
         this.recognition.onresult = (event) => {
+            console.log('� ONRESULT HANDLER FIRED:', event);
             let interimTranscript = '';
             let finalTranscript = '';
 
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i].transcript;
+                console.log(`Result ${i}:`, transcript, 'isFinal:', event.results[i].isFinal);
+                
                 if (event.results[i].isFinal) {
                     finalTranscript += transcript + ' ';
                 } else {
@@ -51,16 +86,31 @@ class VoiceQuizCreator {
                 }
             }
 
-            this.currentTranscript = finalTranscript || interimTranscript;
-            this.updateTranscript(this.currentTranscript);
+            // Update display with both interim and final
+            let displayText = '';
+            if (finalTranscript) {
+                displayText = `✓ ${finalTranscript}`;
+                this.currentTranscript = finalTranscript;
+                console.log('✅ FINAL transcript:', finalTranscript);
+            } else if (interimTranscript) {
+                displayText = `🎤 ${interimTranscript}`;
+                this.currentTranscript = interimTranscript;
+                console.log('📝 Interim transcript:', interimTranscript);
+            }
+            
+            this.updateTranscript(displayText);
 
             if (finalTranscript) {
-                console.log('Final transcript:', finalTranscript);
+                console.log('✅ Processing command:', finalTranscript);
+                // Process the command immediately when final result is detected
+                this.parseCommand(finalTranscript);
             }
         };
+        
+        console.log('✅ onresult handler attached');
 
         this.recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
+            console.error('🔥 ONERROR HANDLER FIRED - Speech recognition error:', event.error);
             this.isListening = false;
             
             let errorMessage = 'Error: ';
@@ -70,56 +120,114 @@ class VoiceQuizCreator {
                     errorMessage += 'Network error - check internet connection';
                     break;
                 case 'audio':
-                    errorMessage += 'Audio error - check microphone';
+                    errorMessage += 'Audio error - check microphone is plugged in and working';
                     break;
                 case 'not-allowed':
-                    errorMessage += 'Microphone permission denied - allow in browser settings';
+                    errorMessage += 'Microphone permission DENIED - please allow microphone access in browser settings';
                     break;
                 case 'no-speech':
-                    errorMessage += 'No speech detected - try again';
+                    errorMessage += 'No speech detected - try speaking louder or closer to the mic';
+                    break;
+                case 'service-not-allowed':
+                    errorMessage += 'Speech recognition service not allowed - check browser permissions';
                     break;
                 default:
                     errorMessage += event.error;
             }
             
+            console.error('Full error message:', errorMessage);
             this.updateStatus('error');
             this.updateTranscript(errorMessage);
             this.speak(errorMessage);
         };
+        
+        console.log('✅ onerror handler attached');
 
         this.recognition.onend = () => {
+            console.log('� ONEND HANDLER FIRED - Voice recognition ENDED');
+            console.log('Was listening?', this.isListening);
+            console.log('Has transcript?', this.currentTranscript);
             this.isListening = false;
+            // Reset status if no command was processed
             if (!this.currentTranscript) {
                 this.updateStatus('idle');
+                this.updateTranscript('🎤 Ready to listen... Click mic to try again');
             }
-            console.log('Voice recognition ended');
         };
+        
+        console.log('✅ onend handler attached');
+        console.log('✅ All recognition event listeners attached');
     }
 
     startListening() {
         if (!this.recognition) {
-            this.speak('Speech recognition not supported in your browser');
+            const msg = 'Speech recognition not supported in your browser. Try Chrome, Edge, or Safari.';
+            console.error('❌', msg);
+            this.speak(msg);
+            this.updateTranscript(msg);
             return;
         }
 
-        // If already listening, stop it
+        // Always abort previous sessions to reset state
         if (this.isListening) {
-            console.log('Already listening, stopping...');
+            console.log('⏹️ Stopping current listening session...');
             this.recognition.abort();
-            this.isListening = false;
+            // Small delay to ensure abort completes
+            setTimeout(() => this.startListeningImpl(), 100);
             return;
         }
 
+        this.startListeningImpl();
+    }
+
+    startListeningImpl() {
         try {
             this.currentTranscript = '';
-            this.updateTranscript('');
+            this.isListening = false; // Reset to false before starting
+            
+            // Create fresh recognition object to avoid state issues
+            console.log('🔄 Creating fresh recognition object...');
+            if (!this.createFreshRecognition()) {
+                const msg = 'Speech Recognition not supported in your browser. Try Chrome, Edge, or Safari.';
+                console.error('❌', msg);
+                this.updateTranscript(msg);
+                return;
+            }
+            
+            console.log('🎤 Starting voice recognition...');
+            console.log('Browser:', navigator.userAgent.substring(0, 50));
+            console.log('Language:', this.recognition.language);
+            
+            this.updateTranscript('🎤 Listening... Speak now!');
+            this.updateStatus('listening');
             this.recognition.start();
+            
+            console.log('✅ recognition.start() called successfully');
             this.isListening = true;
+            
+            // Don't rely on onstart - assume mic is active since start() succeeded
+            console.log('✅ Voice recognition STARTED - microphone is active');
+            
+            // Set a timeout to detect if no speech is heard
+            this.noSpeechTimeout = setTimeout(() => {
+                if (this.isListening && !this.currentTranscript) {
+                    console.warn('⚠️ No speech detected after 5 seconds');
+                    this.updateTranscript('⚠️ No speech detected - speak louder or closer to microphone');
+                }
+            }, 5000);
+            
         } catch (error) {
-            console.error('Error starting recognition:', error.message);
-            this.isListening = false;
-            this.updateStatus('error');
-            this.updateTranscript('Error starting microphone');
+            if (error.name === 'InvalidStateError') {
+                console.log('⚠️ Recognition already starting, will retry...');
+                this.recognition.abort();
+                this.isListening = false;
+                setTimeout(() => this.startListeningImpl(), 100);
+            } else {
+                console.error('❌ Error starting recognition:', error.message);
+                this.isListening = false;
+                this.updateStatus('error');
+                this.updateTranscript('Error starting microphone: ' + error.message);
+            }
         }
     }
 
@@ -178,7 +286,11 @@ class VoiceQuizCreator {
         console.log('Confirmation:', confirmMessage);
         this.updateTranscript(`${confirmMessage}`);
         
-        await this.speak(confirmMessage);
+        try {
+            await this.speak(confirmMessage);
+        } catch (error) {
+            console.warn('Speech synthesis failed, continuing anyway:', error);
+        }
         await this.createQuiz(topic, numQuestions);
     }
 
@@ -268,17 +380,30 @@ class VoiceQuizCreator {
             utterance.pitch = 1;
             utterance.volume = 1;
 
+            let finished = false;
             const finishHandler = () => {
-                if (callback) {
-                    callback();
+                if (!finished) {
+                    finished = true;
+                    if (callback) {
+                        callback();
+                    }
+                    resolve();
                 }
-                resolve();
             };
 
             utterance.onend = finishHandler;
             utterance.onerror = finishHandler;
 
-            this.synth.speak(utterance);
+            // Timeout fallback in case onend/onerror don't fire
+            const timeout = setTimeout(finishHandler, (text.length / 3) * 1000 + 500);
+            
+            try {
+                this.synth.speak(utterance);
+            } catch (error) {
+                console.error('Speech synthesis error:', error);
+                clearTimeout(timeout);
+                finishHandler();
+            }
         });
     }
 
@@ -303,6 +428,7 @@ class VoiceQuizCreator {
         const transcript = document.querySelector('.voice-transcript');
         if (transcript) {
             transcript.textContent = text;
+            transcript.title = text; // Add tooltip for full text if truncated
             transcript.scrollTop = transcript.scrollHeight;
         }
     }
@@ -343,7 +469,8 @@ function createVoiceControlUI() {
 
     const transcript = document.createElement('div');
     transcript.className = 'voice-transcript';
-    transcript.textContent = 'Click mic to start';
+    transcript.textContent = '🎤 Ready to listen...';
+    transcript.title = 'Say: "Make me a 10 question quiz about Python"';
 
     info.appendChild(badge);
     info.appendChild(transcript);
@@ -358,14 +485,18 @@ function createVoiceControlUI() {
 // Initialize
 function initVoiceQuizCreator() {
     if (typeof apiCall !== 'function') {
-        console.warn('apiCall not ready, deferring voice control init');
+        console.warn('⚠️ apiCall not ready, deferring voice control init');
         return;
     }
 
     createVoiceControlUI();
     voiceQuizCreator = new VoiceQuizCreator();
     
-    console.log('Voice Quiz Creator initialized');
+    console.log('✅ Voice Quiz Creator initialized');
+    console.log('📋 Features:');
+    console.log('  - Click 🎤 button to start listening');
+    console.log('  - Say: "Make me a 10 question quiz about [topic]"');
+    console.log('  - Open browser console (F12) to see debug logs');
 }
 
 // Auto-initialize on dashboard
@@ -395,3 +526,160 @@ window.testVoiceCommand = function(command) {
     console.log('Testing command:', command);
     voiceQuizCreator.parseCommand(command);
 };
+
+// Diagnostic function for troubleshooting
+window.testMicrophone = async function() {
+    console.log('🔍 Running microphone diagnostic...');
+    console.log('');
+    console.log('📋 DIAGNOSTICS:');
+    console.log('Browser:', navigator.userAgent.substring(0, 50) + '...');
+    console.log('');
+    
+    // Check Speech Recognition API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    console.log('1️⃣ Speech Recognition API:', SpeechRecognition ? '✅ Available' : '❌ NOT Available');
+    
+    // Check Microphone Permissions
+    try {
+        const result = await navigator.permissions.query({ name: 'microphone' });
+        console.log('2️⃣ Microphone Permission Status:', result.state);
+        if (result.state === 'denied') {
+            console.log('   ⚠️ CRITICAL: Microphone access DENIED - you must allow in browser settings');
+            console.log('   Steps: Settings > Privacy & Security > Site Settings > Microphone > Allow');
+            return;
+        } else if (result.state === 'prompt') {
+            console.log('   ⚠️ Permission not yet granted - will prompt when you allow');
+        } else {
+            console.log('   ✅ Permission granted');
+        }
+    } catch (error) {
+        console.log('2️⃣ Cannot check permission:', error.message);
+    }
+    
+    // Check Microphone Hardware
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(d => d.kind === 'audioinput');
+        console.log('3️⃣ Microphone Hardware:', audioDevices.length > 0 ? '✅ Found ' + audioDevices.length : '❌ Not Found');
+        if (audioDevices.length > 0) {
+            audioDevices.forEach((device, i) => {
+                console.log(`   Device ${i + 1}: ${device.label || '(unnamed device)'}`);
+            });
+        } else {
+            console.log('   ❌ CRITICAL: No microphone hardware detected!');
+            console.log('   - Check if microphone is plugged in');
+            console.log('   - Check Device Manager for microphone driver issues');
+            console.log('   - Try testing microphone in another app (Discord, Google Meet)');
+            return;
+        }
+    } catch (error) {
+        console.log('3️⃣ Cannot enumerate devices:', error.message);
+    }
+    
+    // Test actual voice recognition
+    if (SpeechRecognition) {
+        console.log('');
+        console.log('4️⃣ Testing Voice Recognition:');
+        const test = new SpeechRecognition();
+        test.continuous = false;
+        test.interimResults = true;
+        test.language = 'en-US';
+        
+        let gotStart = false;
+        let gotResult = false;
+        let gotError = false;
+        
+        test.onstart = () => {
+            console.log('   ✅ Recognition STARTED - listening now...');
+            gotStart = true;
+        };
+        
+        test.onresult = (e) => {
+            console.log('   ✅ Got result:', e.results[e.results.length - 1][0].transcript);
+            gotResult = true;
+            test.abort();
+        };
+        
+        test.onerror = (e) => {
+            console.error('   🔥 ERROR FIRED:', e.error);
+            gotError = true;
+            
+            const errorMsgs = {
+                'network': 'Network error - check internet connection',
+                'audio': 'Audio error - check microphone is plugged in',
+                'not-allowed': 'Microphone permission DENIED',
+                'no-speech': 'No speech detected - speak louder',
+                'service-not-allowed': 'Speech recognition service not allowed',
+                'bad-grammar': 'Bad grammar definition',
+                'aborted': 'Recognition was aborted',
+                'unknown': 'Unknown error'
+            };
+            
+            console.error('   Message:', errorMsgs[e.error] || e.error);
+        };
+        
+        test.onend = () => {
+            console.log('   Recognition ended');
+            console.log('');
+            console.log('📊 RESULTS:');
+            console.log('   Started?', gotStart ? '✅ Yes' : '❌ No');
+            console.log('   Error fired?', gotError ? '⚠️ Yes' : '✅ No');
+            console.log('   Got speech?', gotResult ? '✅ Yes' : '❌ No');
+            
+            if (!gotStart) {
+                console.error('❌ PROBLEM: Recognition never started');
+            } else if (gotError) {
+                console.error('❌ PROBLEM: Error during recognition');
+            } else if (!gotResult) {
+                console.warn('⚠️ No speech detected - try speaking louder/closer to mic');
+            }
+        };
+        
+        try {
+            console.log('   Starting recognition...');
+            test.start();
+            console.log('   ⏳ Listening for 10 seconds... SPEAK NOW! (louder = better)');
+            
+            setTimeout(() => {
+                if (test && !gotResult && gotStart) {
+                    console.log('   ⏰ Timeout - stopping test');
+                    test.abort();
+                }
+            }, 10000);
+        } catch (error) {
+            console.error('   ❌ Cannot start test:', error.message, error.name);
+        }
+    }
+    
+    console.log('');
+    console.log('💡 NEXT STEPS:');
+    console.log('  1. If no microphone found - check Device Manager');
+    console.log('  2. If permission denied - allow in browser settings');
+    console.log('  3. If no speech detected - speak louder/closer');
+    console.log('  4. If error fired - check error message above');
+    console.log('  5. Test microphone in Discord/Google Meet to verify it works');
+};
+
+// Export diagnostic function
+window.voiceDebug = function() {
+    console.log('🎤 VOICE CONTROL DEBUG INFO:');
+    if (voiceQuizCreator) {
+        console.log('Status: Initialized');
+        console.log('Listening:', voiceQuizCreator.isListening);
+        console.log('Current transcript:', voiceQuizCreator.currentTranscript);
+        console.log('Recognition available:', voiceQuizCreator.recognition ? 'Yes' : 'No');
+    } else {
+        console.log('Status: NOT initialized');
+    }
+    console.log('');
+    console.log('📞 Commands:');
+    console.log('  testVoiceCommand("make me a quiz about python")');
+    console.log('  testMicrophone()');
+    console.log('  voiceDebug()');
+};
+
+console.log('');
+console.log('💡 TIP: For debugging, open browser console (F12) and type:');
+console.log('  testMicrophone()  - Check if microphone works');
+console.log('  voiceDebug()      - View voice control status');
+
